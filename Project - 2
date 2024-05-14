@@ -1,0 +1,392 @@
+Models
+-------------------------------------------------------
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using System.ComponentModel.DataAnnotations;
+
+namespace dotnetapp.Models
+{
+    public class Player
+    {
+        [Key]
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public string Category { get; set; }
+        public decimal BiddingAmount { get; set; }
+        public int TeamId { get; set; }
+        public Team Team { get; set; }
+
+    }
+}
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using System.ComponentModel.DataAnnotations;
+
+namespace dotnetapp.Models
+{
+    public class Team
+    {
+        [Key]
+        public int Id { get; set; }
+        
+        [Required(ErrorMessage = "Name is required.")]
+        public string Name { get; set; }
+
+        [Range(0, int.MaxValue, ErrorMessage = "MaximumBudget must be greater than or equal to 0.")]
+        public decimal MaximumBudget { get; set; }
+        public List<Player> Players  { get; set; }
+    }
+}
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection.Emit;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+
+namespace dotnetapp.Models
+{
+    public class ApplicationDbContext : DbContext
+    {
+        public DbSet<Team> Teams {get; set;}
+        public DbSet<Player> Players {get; set;}
+
+        public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options)
+        {
+            
+        }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder){
+            base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<Player>()
+            .HasOne<Team>(i => i.Team)
+            .WithMany(i => i.Players)
+            .HasForeignKey(i => i.TeamId);
+                        
+        }
+    }
+}
+
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace dotnetapp.Models
+{
+    public class IndexDbContextView
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public string Category { get; set; }
+        public decimal BiddingAmount { get; set; }
+        public string TeamName { get; set; }
+    }
+}
+
+Controllers
+--------------------------------------------------------
+
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Runtime.InteropServices.ComTypes;
+using System.Threading.Tasks;
+using dotnetapp.Models;
+
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
+
+
+namespace dotnetapp.Controllers
+{
+   
+    public class PlayerController : Controller
+    {
+       private readonly ApplicationDbContext ctx;
+       public PlayerController(ApplicationDbContext ctx)
+       {
+         this.ctx = ctx;
+       }
+       public List<Player> players = new List<Player>{
+        new Player { Id = 1, Name = "Player 1", Category = "Category 1", BiddingAmount = 100 },
+        new Player { Id = 2, Name = "Player 2", Category = "Category 2", BiddingAmount = 200 },
+        new Player { Id = 3, Name = "Player 3", Category = "Category 3", BiddingAmount = 300 }
+        };
+
+
+        public IActionResult Index()
+        {
+            return View(players);
+        }
+
+        public IActionResult Create()
+        {
+             
+            return View();
+        }
+        
+        [HttpPost]
+        public IActionResult Create(Player player)
+        {
+            if(players.Count == 0){
+                player.Id = 1;
+            } else{
+                player.Id = players.Max(i => i.Id) + 1;
+            }
+            players.Add(player);
+            return RedirectToAction("Index");
+        }
+
+        public IActionResult IndexDbContext(){
+            List<IndexDbContextView> list = new List<IndexDbContextView>();
+            List<Player> players = ctx.Players.Include(i => i.Team).ToList();
+            foreach (var i in players)
+            {
+                IndexDbContextView obj = new IndexDbContextView();
+                obj.Id = i.Id;
+                obj.Name = i.Name;
+                obj.Category = i.Category;
+                obj.BiddingAmount = i.BiddingAmount;
+                obj.TeamName = i.Team.Name;
+                list.Add(obj);
+            }
+            return View(list);
+        }
+
+        public IActionResult CreateDbContext(){
+            List<Team> teams = ctx.Teams.ToList();
+            ViewBag.TeamData = teams;
+            return View();
+        }
+
+        [HttpPost]
+        public IActionResult CreateDbContext(Player model){
+            ctx.Players.Add(model);
+            ctx.SaveChanges();
+            return RedirectToAction("IndexDbContext");
+        }
+
+    }
+}
+
+
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Threading.Tasks;
+using dotnetapp.Models;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+
+namespace dotnetapp.Controllers
+{
+    public class TeamController : Controller
+    {
+        private readonly ApplicationDbContext ctx;
+        public TeamController(ApplicationDbContext ctx)
+        {
+            this.ctx = ctx;
+        }
+
+        public IActionResult Index()
+        {
+            List<Team> teams = ctx.Teams.ToList();
+            return View(teams);
+        }
+
+        public IActionResult Create()
+        {
+            return View();
+        }
+         
+        [HttpPost]
+        public IActionResult Create(Team team)
+        {
+            // if(ModelState.IsValid){
+                // Team temp = new Team();
+                // temp.Name = team.Name;
+                // temp.MaximumBudget = team.MaximumBudget;
+                ctx.Teams.Add(team);
+                ctx.SaveChanges();
+                return RedirectToAction("Index");
+            // }
+            // return View();
+        }
+
+    }
+}
+
+Views
+-----------------------------------------------------------------------------------
+Player > Create
+-------------
+@model Player;
+<h2>Create Player</h2>
+<form  method="post">
+   <div class="form-group">
+    <label for="Name">Name</label>
+    <input type="text" class="form-control" asp-for="Name">
+   </div>
+
+   <div class="form-group">
+    <label for="Category">Category</label>
+    <input type="text" class="form-control" asp-for="Category">
+   </div>
+
+   <div class="form-group">
+    <label for="BiddingAmount">BiddingAmount</label>
+    <input type="text" class="form-control" asp-for="BiddingAmount">
+   </div>
+   <button type="submit" class="btn btn-primary">Create</button>
+</form>
+<a href="/Player/Index" class="text-primary">Back to List</a>
+
+Player > Index
+-------------
+@model List<Player>;
+
+<h2>Player List</h2>
+<a href="/Player/Create">Create New Player</a>
+<table class="table">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Category</th>
+            <th>Bidding Amount</th>
+        </tr>
+    </thead>
+    <tbody>
+       @foreach (var i in Model)
+       {
+         <tr>
+            <td>@i.Name</td>
+            <td>@i.Category</td>
+            <td>@i.BiddingAmount</td>
+         </tr>
+       }
+    </tbody>
+</table>
+
+Player > CreateDbContext
+-------------
+
+@model Player;
+
+<h2>Create Player</h2>
+<form  method="post">
+   <div class="form-group">
+    <label for="Name">Name</label>
+    <input type="text" class="form-control" asp-for="Name">
+   </div>
+
+   <div class="form-group">
+    <label for="Category">Category</label>
+    <input type="text" class="form-control" asp-for="Category">
+   </div>
+
+   <div class="form-group">
+    <label for="BiddingAmount">BiddingAmount</label>
+    <input type="text" class="form-control" asp-for="BiddingAmount">
+   </div>
+
+   <div class="form-group">
+    <label for="TeamId">Team Name</label>
+   <select asp-for="TeamId" class="form-control">
+    <option value="#">Select a Team</option>
+     @foreach (var i in ViewBag.TeamData)
+     {
+      <option value="@i.Id">@i.Name</option>
+     }
+   </select>
+   </div>
+
+   <button type="submit" class="btn btn-primary">Create</button>
+</form>
+<a href="/Player/IndexDbContext" class="text-primary">Back to List</a>
+
+Player > IndexDbContext
+-------------
+
+ @model List<IndexDbContextView>;
+<h2>Player List</h2>
+<a href="/Player/CreateDbContext">Create New Player</a>
+<table class="table">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Category</th>
+            <th>Bidding Amount</th>
+            <th>Team Name</th>
+        </tr>
+    </thead>
+    <tbody>
+       @foreach (var i in Model)
+       {
+         <tr>
+            <td>@i.Name</td>
+            <td>@i.Category</td>
+            <td>@i.BiddingAmount</td>
+            <td>@i.TeamName</td>
+         </tr>
+       }
+    </tbody>
+</table> 
+
+Team > Create
+-------------
+
+@model Team;
+<h2>Create Team</h2>
+<form  method="post">
+   <div class="form-group">
+    <label for="Name">Name</label>
+    <input type="text" class="form-control" asp-for="Name">
+    <span class="text-danger" asp-validation-for="Name"></span>
+   </div>
+
+   <div class="form-group">
+    <label for="MaximumBudget">MaximumBudget</label>
+    <input type="text" class="form-control" asp-for="MaximumBudget">
+    <span class="text-danger" asp-validation-for="MaximumBudget"></span>
+   </div>
+
+   <button type="submit" class="btn btn-primary">Create</button>
+</form>
+<a href="/Team/Index" class="text-primary">Back to List</a>
+
+
+Team > Index
+-------------
+
+@model List<Team>;
+<h2>Team List</h2>
+<a href="/Team/Create">Create New Team</a>
+<table class="table">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>MaximumBudget</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var i in Model)
+        {
+            <tr>
+                <td>@i.Name</td>
+                <td>@i.MaximumBudget</td>
+            </tr>
+        }
+    </tbody>
+</table>
